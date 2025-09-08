@@ -71,3 +71,21 @@ streamlit run ui/app.py
   - Loading estimate ≈ 60 seconds per 100 MB (rounded to nearest 5s)
   - Transcription estimate ≈ ~1 minute per remaining chunk
 - Environment variables are read from the OS. If you prefer a `.env` file, you can install `python-dotenv` and load it at app start.
+
+## Build a self-contained .exe (Windows, PyInstaller)
+
+1. Place `ffmpeg.exe` and `ffprobe.exe` in an `ffmpeg/` folder at repo root (same level as `run.py`).
+2. Build the executable:
+```bash
+pip install pyinstaller
+pyinstaller --noconfirm --onefile \
+  --add-binary "ffmpeg\\ffmpeg.exe;ffmpeg" \
+  --add-binary "ffmpeg\\ffprobe.exe;ffmpeg" \
+  run.py
+```
+
+3. Distribute the single exe from `dist/run.exe`. The app will auto-open the browser to `http://localhost:8501`.
+
+Notes:
+- `run.py` starts Streamlit programmatically and configures pydub to use the bundled FFmpeg binaries when frozen.
+- For macOS/Linux, adjust binary names accordingly and consider `--windowed` or platform-specific bundlers.
