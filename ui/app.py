@@ -5,11 +5,12 @@ import streamlit as st
 import tempfile
 import os
 import sys
+from pydub import AudioSegment
 
 # Add the parent directory to the path so we can import from api
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from api import transcribe_audio, get_default_api_key, validate_audio_file
+from api import transcribe_audio, transcribe_audio_segment, chunk_audio, get_default_api_key, validate_audio_file
 
 
 def main():
@@ -71,25 +72,73 @@ def main():
         st.header("3. Transcription")
         
         if st.button("🎯 Transcribe Audio", type="primary"):
-            with st.spinner("Please wait as your audio file is processed..."):
-                try:
-                    # Save uploaded file to temporary location
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as tmp_file:
-                        tmp_file.write(uploaded_file.getvalue())
-                        tmp_file_path = tmp_file.name
+            # Create progress bar and status
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            try:
+                # Save uploaded file to temporary location
+                with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as tmp_file:
+                    tmp_file.write(uploaded_file.getvalue())
+                    tmp_file_path = tmp_file.name
+                
+                # Load audio file with estimate (60s per 100MB, rounded to nearest 5s)
+                file_mb = uploaded_file.size / (1024 * 1024)
+                estimate_seconds = 60 * (file_mb / 100.0)
+                rounded_seconds = int(round(estimate_seconds / 5.0) * 5)
+                status_text.text(f"Loading audio file... Estimated time: ~{rounded_seconds}s")
+                audio = AudioSegment.from_file(tmp_file_path)
+                
+                # Chunk the audio
+                status_text.text("Chunking audio...")
+                chunked_audio = chunk_audio(audio, chunk_duration_ms=30000)
+                
+                # Transcribe each chunk with progress updates
+                st.session_state.transcribed_text = ""  # Reset text
+                total_chunks = len(chunked_audio)
+                had_error = False
+                
+                for i, chunk in enumerate(chunked_audio):
+                    status_text.text(f"Transcribing chunk {i+1} of {total_chunks}...")
+                    progress_bar.progress((i + 1) / total_chunks)
                     
-                    # Transcribe the audio
-                    transcribed_text = transcribe_audio(tmp_file_path, api_key)
-                    st.session_state.transcribed_text = transcribed_text
-                    
-                    # Clean up temporary file
-                    os.unlink(tmp_file_path)
-                    
+                    try:
+                        chunk_text = transcribe_audio_segment(chunk, api_key)
+                        if chunk_text.strip():
+                            st.session_state.transcribed_text += chunk_text + " "
+                    except Exception as e:
+                        had_error = True
+                        st.warning(f"Error transcribing chunk {i+1}: {e}")
+                        continue
+                
+                # Clean up temporary file
+                os.unlink(tmp_file_path)
+                
+                # Decide final UI state based on success/error
+                progress_bar.progress(1.0)
+                if had_error or not st.session_state.transcribed_text.strip():
+                    status_text.text("Sorry, we could not complete the transcription.")
+                    st.error("Apologies — something went wrong transcribing your audio. Please try again.")
+                    if st.button("🔄 Restart"):
+                        for key in list(st.session_state.keys()):
+                            del st.session_state[key]
+                        st.rerun()
+                else:
+                    status_text.text("Transcription complete!")
                     st.success("🎉 Your audio file has been transcribed!")
-                    
-                except Exception as e:
-                    st.error(f"❌ Error: {e}")
-                    st.session_state.transcribed_text = ""
+                
+            except Exception as e:
+                st.error("Apologies — we couldn't transcribe your audio.")
+                st.error(f"Details: {e}")
+                if 'tmp_file_path' in locals():
+                    try:
+                        os.unlink(tmp_file_path)
+                    except OSError:
+                        pass
+                if st.button("🔄 Restart"):
+                    for key in list(st.session_state.keys()):
+                        del st.session_state[key]
+                    st.rerun()
     else:
         st.info("📁 Please select an audio file to continue")
         st.stop()
@@ -126,9 +175,9 @@ def main():
         with col3:
             # Start over button
             if st.button("🔄 Start Over"):
-                # Reset session state
-                st.session_state.transcribed_text = ""
-                st.session_state.uploaded_file = None
+                # Fully reset session state
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
                 st.rerun()
 
 
