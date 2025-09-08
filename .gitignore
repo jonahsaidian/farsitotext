@@ -8,3 +8,4 @@ samples
 **/*.wav
 **/*.tmp
 **/*.log
+ffmpeg
