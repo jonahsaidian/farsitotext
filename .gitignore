@@ -5,3 +5,6 @@ dist
 venv
 *.spec
 samples
+**/*.wav
+**/*.tmp
+**/*.log

@@ -1,6 +1,6 @@
 # Farsi Audio Transcriber
 
-A simple tool to transcribe Farsi (Persian) audio to text using OpenAI's API.
+A Streamlit app that transcribes Farsi (Persian) audio to text using OpenAI's API. Large files are processed reliably by chunking audio into segments.
 
 ## Project Structure
 
@@ -10,9 +10,8 @@ farsi_to_text/
 │   ├── app.py          # Streamlit UI application
 │   └── __init__.py
 ├── api/
-│   ├── transcriber.py  # API logic for transcription
+│   ├── transcriber.py  # API logic for transcription (chunking + per-chunk transcription)
 │   └── __init__.py
-├── main.py             # Original Tkinter app (legacy)
 ├── requirements.txt    # Python dependencies
 └── README.md
 ```
@@ -24,7 +23,12 @@ farsi_to_text/
 pip install -r requirements.txt
 ```
 
-2. Set your OpenAI API key (optional):
+2. Install FFmpeg (required by pydub for MP3/MP4, etc.)
+   - Windows: download from `https://ffmpeg.org/download.html`, extract, and add the `bin` folder to PATH
+   - macOS (Homebrew): `brew install ffmpeg`
+   - Linux: use your package manager, e.g. `sudo apt-get install ffmpeg`
+
+3. Set your OpenAI API key (via environment variable):
 ```bash
 # Windows
 set OPENAI_API_KEY=your_api_key_here
@@ -35,14 +39,9 @@ export OPENAI_API_KEY=your_api_key_here
 
 ## Running the App
 
-### Streamlit Version (Recommended)
+### Streamlit App
 ```bash
 streamlit run ui/app.py
-```
-
-### Original Tkinter Version
-```bash
-python main.py
 ```
 
 ## Features
@@ -50,9 +49,10 @@ python main.py
 - **Streamlit UI**: Modern, clean interface
 - **Auto API Key**: Automatically loads from environment variables
 - **File Upload**: Drag-and-drop audio file selection
-- **Progress Tracking**: Real-time transcription progress
+- **Progress Tracking**: Real-time progress with time estimates
+- **Chunked Processing**: Processes large files by 200s chunks for reliability
 - **Text Export**: Save transcribed text as .txt file
-- **Start Over**: Easy reset for new files
+- **Restart**: One-click full reset to initial state
 
 ## Supported Audio Formats
 
@@ -63,3 +63,11 @@ python main.py
 - M4A
 - WAV
 - WEBM
+
+## Notes
+
+- FFmpeg must be installed and on PATH for `pydub` to read non-WAV formats like MP3 and MP4.
+- Time estimates are heuristic:
+  - Loading estimate ≈ 60 seconds per 100 MB (rounded to nearest 5s)
+  - Transcription estimate ≈ ~1 minute per remaining chunk
+- Environment variables are read from the OS. If you prefer a `.env` file, you can install `python-dotenv` and load it at app start.
