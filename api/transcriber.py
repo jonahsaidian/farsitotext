@@ -108,16 +108,3 @@ def get_default_api_key() -> str:
     """
     return os.environ.get("OPENAI_API_KEY", "")
 
-
-def validate_audio_file(file_path: str) -> bool:
-    """
-    Validate if the file is a supported audio format.
-    
-    Args:
-        file_path (str): Path to the file
-        
-    Returns:
-        bool: True if valid audio file, False otherwise
-    """
-    valid_exts = ('.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm')
-    return file_path.lower().endswith(valid_exts)

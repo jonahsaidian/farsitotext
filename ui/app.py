@@ -12,7 +12,7 @@ from pydub import AudioSegment
 # Add the parent directory to the path so we can import from api
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from api import transcribe_audio, transcribe_audio_segment, chunk_audio, get_default_api_key, validate_audio_file
+from api import transcribe_audio_segment, chunk_audio, get_default_api_key
 
 
 def main():
