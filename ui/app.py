@@ -5,6 +5,8 @@ import streamlit as st
 import tempfile
 import os
 import sys
+import time
+import threading
 from pydub import AudioSegment
 
 # Add the parent directory to the path so we can import from api
@@ -82,16 +84,43 @@ def main():
                     tmp_file.write(uploaded_file.getvalue())
                     tmp_file_path = tmp_file.name
                 
-                # Load audio file with estimate (60s per 100MB, rounded to nearest 5s)
+                # Load audio file concurrently while updating an estimate (60s per 100MB, rounded to nearest 5s)
                 file_mb = uploaded_file.size / (1024 * 1024)
                 estimate_seconds = 60 * (file_mb / 100.0)
                 rounded_seconds = int(round(estimate_seconds / 5.0) * 5)
-                status_text.text(f"Loading audio file... Estimated time: ~{rounded_seconds}s")
-                audio = AudioSegment.from_file(tmp_file_path)
+
+                loaded_audio: dict = {"segment": None, "error": None}
+                done_event = threading.Event()
+
+                def _load_audio():
+                    try:
+                        seg = AudioSegment.from_file(tmp_file_path)
+                        loaded_audio["segment"] = seg
+                    except Exception as _e:
+                        loaded_audio["error"] = str(_e)
+                    finally:
+                        done_event.set()
+
+                threading.Thread(target=_load_audio, daemon=True).start()
+
+                remaining = max(0, rounded_seconds)
+                while not done_event.is_set() and remaining > 0:
+                    status_text.text(f"Loading audio file... Estimated time: ~{remaining}s")
+                    time.sleep(5)
+                    remaining = max(0, remaining - 5)
+
+                if not done_event.is_set():
+                    status_text.text("Loading audio file... Estimated time: a few seconds remaining")
+
+                # Ensure loading finished
+                done_event.wait()
+                if loaded_audio["error"]:
+                    raise RuntimeError(f"Failed to load audio: {loaded_audio['error']}")
+                audio = loaded_audio["segment"]
                 
                 # Chunk the audio
                 status_text.text("Chunking audio...")
-                chunked_audio = chunk_audio(audio, chunk_duration_ms=30000)
+                chunked_audio = chunk_audio(audio, chunk_duration_ms=200000)
                 
                 # Transcribe each chunk with progress updates
                 st.session_state.transcribed_text = ""  # Reset text
