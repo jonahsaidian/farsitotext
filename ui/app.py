@@ -119,7 +119,7 @@ def main():
                 audio = loaded_audio["segment"]
                 
                 # Chunk the audio
-                status_text.text("Chunking audio...")
+                status_text.text("Preparing audio for transcription...")
                 chunked_audio = chunk_audio(audio, chunk_duration_ms=200000)
                 
                 # Transcribe each chunk with progress updates
@@ -128,7 +128,10 @@ def main():
                 had_error = False
                 
                 for i, chunk in enumerate(chunked_audio):
-                    status_text.text(f"Transcribing chunk {i+1} of {total_chunks}...")
+                    remaining_chunks = max(0, total_chunks - (i + 1))
+                    est_minutes = remaining_chunks  # ~1 minute per remaining chunk
+                    est_label = f"~{est_minutes} min remaining" if est_minutes != 1 else "~1 min remaining"
+                    status_text.text(f"Transcribing audio file: {est_label}")
                     progress_bar.progress((i + 1) / total_chunks)
                     
                     try:
