@@ -77,6 +77,7 @@ def main():
             # Create progress bar and status
             progress_bar = st.progress(0)
             status_text = st.empty()
+            result_box = st.empty()  # Placeholder for live transcription
             
             try:
                 # Save uploaded file to temporary location
@@ -127,6 +128,13 @@ def main():
                 total_chunks = len(chunked_audio)
                 had_error = False
                 
+                # Show the result box as soon as transcription starts
+                result_box.text_area(
+                    "Transcribed Text (Live):",
+                    value=st.session_state.transcribed_text,
+                    height=200,
+                    disabled=True
+                )
                 for i, chunk in enumerate(chunked_audio):
                     remaining_chunks = max(0, total_chunks - (i + 1))
                     est_minutes = remaining_chunks  # ~1 minute per remaining chunk
@@ -138,10 +146,19 @@ def main():
                         chunk_text = transcribe_audio_segment(chunk, api_key)
                         if chunk_text.strip():
                             st.session_state.transcribed_text += chunk_text + " "
+                            # Update the result box live
+                            result_box.text_area(
+                                "Transcribed Text (Live):",
+                                value=st.session_state.transcribed_text,
+                                height=200,
+                                disabled=True
+                            )
                     except Exception as e:
                         had_error = True
                         st.warning(f"Error transcribing chunk {i+1}: {e}")
                         continue
+                # Hide the live result box after transcription is complete
+                result_box.empty()
                 
                 # Clean up temporary file
                 os.unlink(tmp_file_path)
@@ -200,9 +217,7 @@ def main():
             )
         
         with col2:
-            # Copy to clipboard button
-            if st.button("📋 Copy to Clipboard"):
-                st.write("Text copied! (Use Ctrl+V to paste)")
+            pass
         
         with col3:
             # Start over button
