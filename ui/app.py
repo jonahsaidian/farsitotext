@@ -12,7 +12,7 @@ from pydub import AudioSegment
 # Add the parent directory to the path so we can import from api
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from api import transcribe_audio_segment, chunk_audio, get_default_api_key
+from api import transcribe_audio_segment, chunk_audio, get_default_api_key, postprocess_transcription
 
 
 def main():
@@ -22,7 +22,6 @@ def main():
         page_icon="🎵",
         layout="centered"
     )
-    
     st.title("🎵 Farsi Transcriber")
     st.markdown("A simple tool to transcribe Farsi (Persian) audio to text via OpenAI.")
     
@@ -33,7 +32,7 @@ def main():
         st.session_state.api_key = ""
     if 'uploaded_file' not in st.session_state:
         st.session_state.uploaded_file = None
-    
+
     # Step 1: API Key Input
     st.header("1. API Configuration")
     
@@ -74,6 +73,7 @@ def main():
         st.header("3. Transcription")
         
         if st.button("🎯 Transcribe Audio", type="primary"):
+            st.session_state.had_error = False
             # Create progress bar and status
             progress_bar = st.progress(0)
             status_text = st.empty()
@@ -126,7 +126,6 @@ def main():
                 # Transcribe each chunk with progress updates
                 st.session_state.transcribed_text = ""  # Reset text
                 total_chunks = len(chunked_audio)
-                had_error = False
                 
                 # Show the result box as soon as transcription starts
                 result_box.text_area(
@@ -138,9 +137,9 @@ def main():
                 for i, chunk in enumerate(chunked_audio):
                     remaining_chunks = max(0, total_chunks - (i + 1))
                     est_minutes = remaining_chunks  # ~1 minute per remaining chunk
-                    est_label = f"~{est_minutes} min remaining" if est_minutes != 1 else "~1 min remaining"
+                    est_label = f"~{est_minutes} min remaining" if est_minutes >= 1 else "~1 min remaining"
                     status_text.text(f"Transcribing audio file: {est_label}")
-                    progress_bar.progress((i + 1) / total_chunks)
+                    progress_bar.progress((i + 0.5) / total_chunks)
                     
                     try:
                         chunk_text = transcribe_audio_segment(chunk, api_key)
@@ -154,29 +153,39 @@ def main():
                                 disabled=True
                             )
                     except Exception as e:
-                        had_error = True
-                        st.warning(f"Error transcribing chunk {i+1}: {e}")
-                        continue
-                # Hide the live result box after transcription is complete
-                result_box.empty()
-                
+                        st.session_state.had_error = True
+                        st.error(f"Error transcribing chunk {i+1}")
+                        st.error(f"Details: {e}")
+                        break
+                try:
+                    # Post-process the fully transcribed text
+                    st.session_state.transcribed_text = postprocess_transcription(
+                        st.session_state.transcribed_text, api_key
+                    )
+                except Exception as e:
+                    st.session_state.had_error = True
+                    st.error("An error occurred during post-processing of the transcription.")
+                    st.error(f"Details: {e}")
                 # Clean up temporary file
                 os.unlink(tmp_file_path)
-                
                 # Decide final UI state based on success/error
                 progress_bar.progress(1.0)
-                if had_error or not st.session_state.transcribed_text.strip():
-                    status_text.text("Sorry, we could not complete the transcription.")
-                    st.error("Apologies — something went wrong transcribing your audio. Please try again.")
+                if st.session_state.had_error or not st.session_state.transcribed_text.strip():
                     if st.button("🔄 Restart"):
                         for key in list(st.session_state.keys()):
                             del st.session_state[key]
+                        st.session_state.had_error = False
+                        st.session_state.transcribed_text = ""
+                        st.session_state.uploaded_file = None  # Clear the file uploader
                         st.rerun()
                 else:
+                    # Hide the live result box after transcription is complete
+                    result_box.empty()
                     status_text.text("Transcription complete!")
                     st.success("🎉 Your audio file has been transcribed!")
                 
             except Exception as e:
+                st.session_state.had_error = True
                 st.error("Apologies — we couldn't transcribe your audio.")
                 st.error(f"Details: {e}")
                 if 'tmp_file_path' in locals():
@@ -187,13 +196,15 @@ def main():
                 if st.button("🔄 Restart"):
                     for key in list(st.session_state.keys()):
                         del st.session_state[key]
+                    st.session_state.had_error = True
+                    st.session_state.transcribed_text = ""
+                    st.session_state.uploaded_file = None  # Clear the file uploader
                     st.rerun()
     else:
         st.info("📁 Please select an audio file to continue")
-        st.stop()
     
     # Step 4: Display Results and Actions
-    if st.session_state.transcribed_text:
+    if st.session_state.transcribed_text and not st.session_state.had_error:
         st.header("4. Transcription Results")
         
         # Display transcribed text
@@ -225,6 +236,7 @@ def main():
                 # Fully reset session state
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
+                st.session_state.uploaded_file = None  # Clear the file uploader
                 st.rerun()
 
 

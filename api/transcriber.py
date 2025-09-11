@@ -4,8 +4,10 @@ API module for Farsi audio transcription using OpenAI.
 from openai import OpenAI, AuthenticationError
 import os
 import tempfile
+from openai.types.chat.chat_completion_content_part_input_audio_param import InputAudio
 from pydub import AudioSegment
 from dotenv import load_dotenv
+import openai
 
 load_dotenv()
 
@@ -99,6 +101,29 @@ def transcribe_audio(file_path: str, api_key: str) -> str:
     
     # Combine all transcribed text
     return " ".join(transcribed_texts)
+
+
+def postprocess_transcription(transcribed_text: str, api_key: str) -> str:
+    """
+    Calls OpenAI to return the transcribed text with minor grammar, spelling, and syntax fixes only.
+    The model should not attempt to modify the text beyond that.
+    """
+    client = OpenAI(api_key=api_key)
+    prompt = (
+        "You are a helpful assistant and expert in the Farsi language. "
+        "Below is an audio recording of a person speaking Farsi that has been transcribed into text via a chunking strategy. "
+        "Given the following transcribed text, return it with only minor fixes for grammar, spelling, and syntax. "
+        "Do not change the meaning, do not summarize, and do not modify the text beyond these minor corrections. "
+        "If it seems like the transcription is incomplete, return the incomplete text as is. Do not add words that seem like they should be there. "
+        "Return only the corrected text, do not include any other text or commentary, only return the farsi text."
+    )
+    response = client.responses.create(
+        model="gpt-4o",
+        input=transcribed_text,
+        instructions=prompt,
+    )
+    return response.output_text
+
 
 
 def get_default_api_key() -> str:
