@@ -5,7 +5,9 @@ from openai import OpenAI, AuthenticationError
 import os
 import tempfile
 from pydub import AudioSegment
+from dotenv import load_dotenv
 
+load_dotenv()
 
 def chunk_audio(audio_segment: AudioSegment, chunk_duration_ms: int = 30000) -> list:
     """
