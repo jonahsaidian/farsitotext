@@ -108,6 +108,7 @@ def postprocess_transcription(transcribed_text: str, api_key: str) -> str:
     Calls OpenAI to return the transcribed text with minor grammar, spelling, and syntax fixes only.
     The model should not attempt to modify the text beyond that.
     """
+    return transcribed_text
     client = OpenAI(api_key=api_key)
     prompt = (
         "You are a helpful assistant and expert in the Farsi language. "
