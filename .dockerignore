@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+.env
+.git/
+samples/
+*.wav
+*.tmp
+*.log
+tests/
+CLAUDE.md
