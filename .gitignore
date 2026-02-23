@@ -9,3 +9,4 @@ samples
 **/*.tmp
 **/*.log
 ffmpeg
+CLAUDE.md
