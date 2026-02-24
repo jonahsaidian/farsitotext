@@ -11,9 +11,6 @@ jobs:
       contents: read
       packages: write
 
-    outputs:
-      image: ${{ steps.image.outputs.name }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -24,17 +21,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve image name
-        id: image
-        run: |
-          echo "name=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):latest" >> $GITHUB_OUTPUT
-
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ steps.image.outputs.name }}
+          tags: ghcr.io/jonahsaidian/farsitotext:latest
 
   deploy:
     needs: build-and-push
@@ -44,9 +36,9 @@ jobs:
       - name: Deploy to droplet
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.DROPLET_IP }}
+          host: ssh.jonahsaidian.com
           username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key: ${{ secrets.DO_SSH_KEY }}
           script: |
             cd /srv/apps
             docker compose pull farsi-transcriber
