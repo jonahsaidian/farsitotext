@@ -2,20 +2,20 @@
 Streamlit UI for Farsi Audio Transcriber.
 """
 
+import math
 import os
+import shutil
 import sys
 import tempfile
-import threading
-import time
 
 import streamlit as st
-from pydub import AudioSegment
 
 # Add the parent directory to the path so we can import from api
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from api import (
     chunk_audio,
+    get_audio_duration_ms,
     get_default_api_key,
     postprocess_transcription,
     transcribe_audio_segment,
@@ -83,56 +83,22 @@ def main():
             result_box = st.empty()  # Placeholder for live transcription
 
             try:
-                # Save uploaded file to temporary location
+                # Stream uploaded file to disk without loading into memory
                 with tempfile.NamedTemporaryFile(
                     delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}"
                 ) as tmp_file:
-                    tmp_file.write(uploaded_file.getvalue())
+                    shutil.copyfileobj(uploaded_file, tmp_file)
                     tmp_file_path = tmp_file.name
 
-                # Load audio file concurrently while updating an estimate (60s per 100MB, rounded to nearest 5s)
-                file_mb = uploaded_file.size / (1024 * 1024)
-                estimate_seconds = 60 * (file_mb / 100.0)
-                rounded_seconds = int(round(estimate_seconds / 5.0) * 5)
-
-                loaded_audio: dict = {"segment": None, "error": None}
-                done_event = threading.Event()
-
-                def _load_audio():
-                    try:
-                        seg = AudioSegment.from_file(tmp_file_path)
-                        loaded_audio["segment"] = seg
-                    except Exception as _e:
-                        loaded_audio["error"] = str(_e)
-                    finally:
-                        done_event.set()
-
-                threading.Thread(target=_load_audio, daemon=True).start()
-
-                remaining = max(0, rounded_seconds)
-                while not done_event.is_set() and remaining > 0:
-                    status_text.text(f"Loading audio file... Estimated time: ~{remaining}s")
-                    time.sleep(5)
-                    remaining = max(0, remaining - 5)
-
-                if not done_event.is_set():
-                    status_text.text(
-                        "Loading audio file... Estimated time: a few seconds remaining"
-                    )
-
-                # Ensure loading finished
-                done_event.wait()
-                if loaded_audio["error"]:
-                    raise RuntimeError(f"Failed to load audio: {loaded_audio['error']}")
-                audio = loaded_audio["segment"]
-
-                # Chunk the audio
+                # Get duration via ffprobe for progress estimation
                 status_text.text("Preparing audio for transcription...")
-                chunked_audio = chunk_audio(audio, chunk_duration_ms=200000)
+                chunk_duration_ms = 200000
+                duration_ms = get_audio_duration_ms(tmp_file_path)
+                total_chunks = math.ceil(duration_ms / chunk_duration_ms)
+                chunked_audio = chunk_audio(tmp_file_path, chunk_duration_ms=chunk_duration_ms)
 
                 # Transcribe each chunk with progress updates
                 st.session_state.transcribed_text = ""  # Reset text
-                total_chunks = len(chunked_audio)
 
                 # Show the result box as soon as transcription starts
                 result_box.text_area(
@@ -141,9 +107,9 @@ def main():
                     height=200,
                     disabled=True,
                 )
-                for i, chunk in enumerate(chunked_audio):
+                for i, chunk_path in enumerate(chunked_audio):
                     remaining_chunks = max(0, total_chunks - (i + 1))
-                    est_minutes = remaining_chunks  # ~1 minute per remaining chunk
+                    est_minutes = remaining_chunks // 3  # ~20 seconds per remaining chunk
                     est_label = (
                         f"~{est_minutes} min remaining" if est_minutes >= 1 else "~1 min remaining"
                     )
@@ -151,7 +117,7 @@ def main():
                     progress_bar.progress((i + 0.5) / total_chunks)
 
                     try:
-                        chunk_text = transcribe_audio_segment(chunk, api_key)
+                        chunk_text = transcribe_audio_segment(chunk_path, api_key)
                         if chunk_text.strip():
                             st.session_state.transcribed_text += chunk_text + " "
                             # Update the result box live
@@ -166,6 +132,11 @@ def main():
                         st.error(f"Error transcribing chunk {i + 1}")
                         st.error(f"Details: {e}")
                         break
+                    finally:
+                        try:
+                            os.unlink(chunk_path)
+                        except OSError:
+                            pass
                 try:
                     # Post-process the fully transcribed text
                     st.session_state.transcribed_text = postprocess_transcription(
