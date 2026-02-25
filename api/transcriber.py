@@ -129,6 +129,7 @@ def postprocess_transcription(transcribed_text: str, api_key: str) -> str:
     Calls OpenAI to return the transcribed text with minor grammar, spelling, and syntax fixes only.
     The model should not attempt to modify the text beyond that.
     """
+    return transcribed_text
     client = OpenAI(api_key=api_key)
     prompt = (
         "You are a helpful assistant and expert in the Farsi language. "
@@ -137,13 +138,16 @@ def postprocess_transcription(transcribed_text: str, api_key: str) -> str:
         "Do not change the meaning, do not summarize, and do not modify the text beyond these minor corrections. "
         "If it seems like the transcription is incomplete, return the incomplete text as is. Do not add words that seem like they should be there. "
         "Return only the corrected text, do not include any other text or commentary, only return the farsi text."
+        "Ensure you return the full text passed in to you, do not cut any of it off, you must return the full edited text."
     )
-    response = client.responses.create(
-        model="gpt-4o",
-        input=transcribed_text,
-        instructions=prompt,
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": transcribed_text},
+        ],
     )
-    return response.output_text
+    return response.choices[0].message.content
 
 
 def get_default_api_key() -> str:

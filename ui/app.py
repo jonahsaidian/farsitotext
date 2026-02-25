@@ -7,13 +7,13 @@ import os
 import shutil
 import sys
 import tempfile
+import tomllib
+from pathlib import Path
 
 import streamlit as st
 
-# Add the parent directory to the path so we can import from api
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from api import (
+sys.path.append(str(Path(__file__).parent.parent))  # noqa: E402
+from api import (  # noqa: E402
     chunk_audio,
     get_audio_duration_ms,
     get_default_api_key,
@@ -21,10 +21,19 @@ from api import (
     transcribe_audio_segment,
 )
 
+_pyproject = Path(__file__).parent.parent / "pyproject.toml"
+with open(_pyproject, "rb") as _f:
+    _APP_VERSION = tomllib.load(_f)["project"]["version"]
+
 
 def main():
     """Main Streamlit application."""
     st.set_page_config(page_title="Farsi Transcriber", page_icon="🎵", layout="centered")
+    st.markdown(
+        f'<div style="position:fixed;top:60px;right:20px;color:gray;font-size:0.8rem;z-index:999">'
+        f"v{_APP_VERSION}</div>",
+        unsafe_allow_html=True,
+    )
     st.title("🎵 Farsi Transcriber")
     st.markdown("A simple tool to transcribe Farsi (Persian) audio to text via OpenAI.")
 
